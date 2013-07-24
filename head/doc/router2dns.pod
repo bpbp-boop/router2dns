@@ -1,0 +1,150 @@
+=head1 NAME
+
+router2dns - create router interface DNS entries from router configurations
+
+=head1 SYNOPSIS
+
+router2dns.pl -V
+
+router2dns.pl -h
+
+router2dns.pl -?
+
+router2dns.pl [-v [level]] [-c filename] [-i] [-o]
+
+=head1 OPTIONS
+
+=over
+
+=item B<-V> or B<--version>
+
+Display router2dns.pl version and exit.
+
+=item B<-?> or B<-h> or B<--help>
+
+Display short help and exit.
+
+=item B<-v> level or B<--verbose> level
+
+Produce verbose output. Level is 1 by default, acceptable values are 
+0 (silent) to 5 (most verbose).
+
+=item B<-c> filename or --config-file-name filename
+
+Use filename as the router2dns configuration file. Default is
+./router2dns.conf
+
+=item B<-i> or B<--include-log>
+
+Log generated DNS resource records.
+
+=item B<-o> or B<--omit-log>
+
+Log omitted entities.
+
+=back
+
+=head1 DESCRIPTION
+
+router2dns creates DNS entries belonging to router interfaces (or similar
+network devices). It processes the configuration files of those devices
+(e.g. Cisco IOS or Juniper JUNOS config files), constructs forward and reverse
+IPv4 and IPv6 DNS entries, and writes these to stripped down BIND format zone files.
+The generated zone files contain only A, AAAA, PTR, and CNAME resource records, 
+$ORIGIN specifications, and comments, so these files must either be post-processed
+(augmented by other necessary items such as SOA, NS, etc., or converted to other
+formats) or included into zone files containing other resource records.
+
+In the router2dns.conf file the user specifies one or more router configuration
+files as input, as well as forward and reverse zones as output. Delegated child
+zones of the reverse zones may also be specified so that reverse entries
+belonging to those child zones will be omitted. Forward and reverse DNS entries
+can also be omitted based on the IP address, the interface name, or the VRF the
+interface belongs to, by specifying an appropriate restriction list.
+
+To use different sets of IP address ranges and/or VRFs please run router2dns
+with different router2dns configuration files.
+
+For a given interface, router2dns generates forward and reverse DNS
+resource records according to the following steps:
+
+=over
+
+=item 1.
+
+Both IPv4 and IPv6 addresses of the interface are put on ordered lists. For
+IOS-type devices, secondary IPv4 addresses are put behind the primary IPv4
+address. IPv6 link-local and EUI-64 generated addresses are dropped. IPv6
+anycast addresses are put behind IPv6 unicast addresses.
+
+=item 2.
+
+All addresses currently on the lists are considered for PTR 
+records.
+
+=item 3.
+
+(IOS-type devices only) Addresses of interfaces referred to in unnumbered IOS
+config statements are prepended to the lists if this feature is enabled.
+
+=item 4.
+
+The first addresses (both IPv4 and IPv6) are considered for A and AAAA records,
+respectively.
+
+=item 5.
+
+The DNS label for the interface is constructed from the interface name found
+in the device's configuration.
+
+=over
+
+=item 1.
+
+The interface name is converted to lower case.
+
+=item 2.
+
+The beginning of the interface name (the interface type) is replaced according
+to "interface-type" options.
+
+=item 3.
+
+The interface name is searched for the patterns specified in
+"interface-substitution" options, and matching patterns are substituted.
+
+=item 4.
+
+Dots, commas, and forward slashes are replaced by dashes.
+
+=back
+
+=back
+
+=head1 BUGS
+
+Currently only Cisco IOS, IOS XE, IOS XR devices are supported by router2dns.
+
+Automatically generated EUI-64 IPv6 addresses are omitted, as they are not in
+the device's config file.
+
+=head1 TODO
+
+Process VRRP/HSRP addresses.
+
+Add options for processing multiple addresses on the same interface.
+
+Collecting automatically generated EUI-64 IPv6 addresses via SNMP.
+
+Check for duplicate PTR records for the same IP address.
+
+Delegated forward zones (similarly to reverse zones).
+
+Juniper JUNOS devices.
+
+=head1 SEE ALSO
+
+router2dns.conf(5)
+
+=cut
+

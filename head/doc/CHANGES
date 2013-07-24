@@ -1,0 +1,25 @@
+2013-xx-yy v0.4.0:
+
+  Change: Add option "register-unnumbered", false by default. Forward records
+  for unnumbered interfaces were generated before. This only happens now when
+  "register-unnumbered" is set to true.
+
+  Change: Remove "type-dash-number" option. It is hard to tell for Cisco
+  interface names (without a complete list of all possible interface types)
+  where the type part ends and the position (number) part begins.
+
+  Change: As per the previous change, the interface name cannot be split into
+  type and position unambiguously, "interface-type" now works on the beginning
+  of the interface name.
+
+  Feature: Add interface name substitution with regular expressions.
+
+  Feature: Add interface name restrictions list.
+
+  Feature: New router2dns config keyword "forward-zone-override".
+
+  Bugfix: Correctly spell IOS XR's "bundle-ether" interface type.
+
+  Bugfix: Verbose logging does not print "A RR" for IPv6 AAAA RRs.
+
+2013-aa-bb v0.3.9

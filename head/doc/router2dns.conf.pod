@@ -1,0 +1,450 @@
+=head1 NAME
+
+router2dns.conf - configuration file format for router2dns
+
+=head1 DESCRIPTION
+
+router2dns.conf (or the file specified with the -c option)
+contains run-time parameters for router2dns. It is
+read by router2dns on start.
+
+=head1 FORMAT
+
+The general format of router2dns.conf is very similar to the format
+used by JUNOS or BIND: it is a series of keyword-value pairs and blocks.
+A keyword-value pair consists of a keyword followed by a value, separated by
+whitespace, closed with a semicolon. A block consists of a keyword
+followed by curly braces which enclose other keyword-value pairs and/or blocks.
+Blocks may also be ended with semicolons after the closing curly bracket, but
+it is not mandatory.
+
+The order of blocks and keyword-value pairs usually does not matter. Exceptions
+are described in this documentation.
+
+=head2 VALUES
+
+If a value contains whitespace, semicolons, or curly braces,
+then these special characters must be escaped with a backslash,
+or the value must be enclosed in double
+quotation marks. Moreover, backslashes and double quotation marks
+must be escaped always, even in a value enlosed in double quotation
+marks. Values must not break across lines.
+
+Boolean values may be specified as true, yes, false, or no.
+These are case insensitive.
+
+IP prefix values must be specified in the prefix/length syntax (e.g.
+192.0.2.128/25 or 2001:db8:5:/48).
+
+=head3 LIST FILES
+
+Some multiple instance keywords have two variants: The direct one where the 
+corresponding value is used directly, and the list file one where the 
+corresponding value is the name of a text file containing values, one value 
+per line. These keywords are named something and something-list-file.
+The list file variant can be used instead of multiple direct ones. Sometimes 
+it's convenient to generate that very simple format list file dynamically, 
+and reference it from the more complex router2dns.conf statically.
+The direct and the list file variants can be mixed, there can be multiple
+instances of both.
+
+List file syntax is similar to the router2dns.conf general synatx, except that 
+these list files only contain values: Values may not break across lines. 
+There can be at most one value per line. Backspace can be used to escape 
+whitespace, double quotation marks, hash marks, and the backspace character 
+itself. Values may only contain whitespace or hash marks if it is 
+escaped or if the value is enclosed between double quotation marks. 
+Values may only contain double quotation marks and backspace if it is
+escaped. Everything from a hash mark to the end of the line is a comment,
+except for hash marks escaped by a backslash or those inside double
+quoted values.
+
+=head2 COMMENTS
+
+Everything on a line after a hash mark is considered a comment,
+except for hash marks escaped by a backslash or those inside double
+quoted values.
+
+=head1 BLOCKS
+
+Top-level blocks are the devices, forward-zone, reverse-zone, options, and 
+restrictions.
+
+=head2 devices block
+
+The devices top-level block lists the network devices, more exactly their 
+configuration files (e.g. JUNOS or IOS config files) that 
+router2dns processes 
+in order to collect IP addresses and interface names so that the appropriate 
+DNS entries can be constructed.
+
+=over
+
+=item ios-routers blocks
+
+The ios-routers blocks (there can be more than one) under the devices block 
+lists Cisco IOS type router configuration files (IOS, IOS XE, IOS XR), and 
+router2dns parameters common for these routers.
+
+These devices usually have multiple IP interfaces. These interfaces
+are registered in the DNS with different domain names. These domain names are
+composed by combining the interface's name and position,
+the device's hostname, and the device's domain name. For example the
+following IOS configuration results in resource records (A and PTR) for the
+fe2-3.rtr1.bud.example.com domain name:
+
+	hostname rtr1.bud
+	ip domain-name example.com
+	interface fastethernet 2/3
+	  ip address 192.0.2.1 255.255.255.224
+
+=over
+
+=item config, config-list-file keywords
+
+The config item specifies an IOS configuration filename, while config-list-file 
+specifies the name of a text file containing IOS configuration filenames. 
+There can be multiple instances of both.
+
+The file names are relative to config-base-dir.
+
+=item main-interface keyword
+
+DNS label, e.g. fe0-0 (assuming the default interface name mapping for FastEthernet0/0), 
+of the main interface. The default is lo0 (mapped from Loopback0).
+
+The main interface of the router may be treated specially by router2dns.
+See the main-interface-rrs keyword.
+
+=item main-interface-rrs keyword
+
+Specifies how to treat the main interface in DNS. Possible values are:
+
+=over
+
+=item intact
+
+Treat it as a regular interface. This is the default.
+
+=item hostname
+
+Omit the interface's label, just use the router's domain name (i.e. create DNS records
+for rtr.example.net instead of lo0.rtr.example.net).
+
+=item cname-of-hostname
+
+Create the regular DNS records for the main interface, and create a CNAME with the router's
+domain name without interface label, pointing to the regular DNS RR (i.e. create
+rtr.example.net IN CNAME lo0.rtr.example.net. additionally).
+
+=back
+
+=item forward-zone keyword
+
+By default router2dns uses the ip domain-name IOS command to find out the
+device's domain name. This can be overridden with the forward-zone keyword.
+(This is useful for example when router2dns is run on the same router 
+configuration files with
+different router2dns.conf files containing different VRF restriction lists, 
+and one VRF's interfaces should be registered
+into the default domains while others should use different forward zones.)
+
+=item forward-zone-override keyword
+
+Boolean value specifying whether the forward-zone overrides the domain found
+in the device's configuration or is used only when there's no domain specified
+in the device's config. The default is true (i.e. router2dns.conf's forward-zone
+is used always, regardless of the domain name in the device's configuration).
+
+=back
+
+=item ios-hosts blocks
+
+The ios-hosts blocks (there can be more than one) under the devices block 
+lists Cisco IOS type configuration files (IOS, IOS XE, IOS XR), usually
+of layer 2 devices (e.g. switches, access points) that are IP hosts.
+
+These devices usually have only one IP interface, used as the management
+interface. When router2dns processes an IOS host device's configuration,
+it uses only the first IP interface (that is not administratively
+down, and is not excluded by the address and VRF restrictions lists).
+This interface is registered in the DNS with a domain name
+composed by combining 
+the device's hostname, and the device's domain name. (Exactly as if the
+device would be listed under ios-routers, the first IP interface would be
+specified as main-interface, and main-interface-rrs would be set to
+hostname.)
+
+In an ios-hosts block there can be config, config-list-file, and
+forward-zone keywords, with the same syntax and semantics as in
+an ios-routers block.
+
+=back
+
+=head2 forward-zone blocks
+
+Each forward-zone top-level block (there can be more than one) specifies 
+a DNS-name-to-IP-address zone
+that should be populated by router interface entries.
+
+=over
+
+=item name keyword
+
+Domain name of the forward DNS zone.
+
+=item file keyword
+
+Name of the forward zone file to be generated.
+
+The file names are relative to output-dir.
+
+=back
+
+=head2 reverse-zone blocks
+
+Each reverse-zone top-level block (there can be more of them) specifies an 
+IP-address-to-DNS-name zone that should be populated by router interface 
+entries belonging to that reverse zone. Delegated child zones belonging to 
+other jurisdictions can be listed so that entries belonging to those child 
+zones will be omitted. Entries not belonging to any
+specified reverse zones will also be omitted.
+
+=over
+
+=item prefix keyword
+
+IP prefix of the reverse DNS zone.
+
+=item file keyword
+
+Name of the forward zone file to be generated.
+
+=item delegated block
+
+The delegated block inside a reverse-zone block enumerate the child zones of the
+current reverse zone that are delegated, so that router2dns will not construct
+PTR records in these zones. Delegated zones can be specified either by the child
+zone name or the corresponding IP prefix.
+
+=over
+
+=item prefix, prefix-list-file keywords
+
+IP prefixes of the delegated reverse zones.
+
+=item name, name-list-file keywords
+
+Delegated zone DNS names relative to the name of the current reverse zone.
+E.g. 2.1 for 10.1.2.0/24 in reverse-zone of 10.0.0.0/8.
+
+=back
+
+=back
+
+=head2 OPTIONS BLOCK
+
+The options top-level block specifies general options, those affecting all zones or devices.
+
+=over
+
+=item config-base-dir keyword
+
+Directory the router configuration files (specified in the devices block) are
+relative to.  Must end with '/'. Default is the current directory.
+
+=item output-dir keyword
+
+Directory the DNS zone files (specified in forward-zone and reverse-zone block)
+are relative to.  Must end with '/'. Default is the current directory.
+
+=item interface-type blocks
+
+The interface name consists of an interface type and a position (e.g. for
+FastEthernet0/0 the type is FastEthernet and the position is 0/0). Without
+knowing all the possible interface types, it is hard to tell where the type
+ends and the position begins, at least for Cisco devices (think of Dot11Radio0
+or MgmtEth0/RSP0/CPU1/0). For that reason router2dns does not draw an exact
+line between the type and the position, it only assumes that the type is at the
+beginning of the interface name.
+
+Interface-type blocks specify a simple mapping from router interface types as
+found in the routers' configurations to their DNS names. Each block specifies
+one or more interface types, and exactly one DNS name. Interface names
+beginning with a default (see below) or user-specified interface type are
+mapped to DNS names by replacing the interface type at the beginning of the
+interface name with the DNS name. Router configuration interface types are
+treated as case insensitive.
+
+The defaults are:
+
+loopback -> lo
+
+ethernet -> e
+
+fastethernet -> fe
+
+gigabitethernet -> ge
+
+tengigabitethernet, tengige -> xge
+
+hundredgige -> hge
+
+vlan -> vl
+
+serial -> s
+
+tunnel -> tun
+
+bundle-ether, port-channel -> be
+
+Interface types not having a default or explicitly specified mapping are simply
+converted to lower case (e.g. POS -> pos, ATM -> atm).
+
+=over
+
+=item interface-substitution blocks
+
+Interface-substitution blocks create a more flexible way to map interface names
+to their DNS names. Interface-substitution occurs after the simple
+interface-type mapping, so it's input is the interface name as modified by the
+interface-type mapping.
+
+Each block specifies one pattern, and zero or one substitution. These are used
+in PERL's s/pattern/substitution/ operator. The interface name is substituted
+according to every interface-substitution block, in the order they are
+specified in router2dns.conf.
+
+=over
+
+=item pattern keyword
+
+A PERL regular expression to match against the interface name (modified by
+"interface-type"). Please do not add surrounding slashes or similar quoting
+characters.
+
+=item substitution keyword
+
+The string to be substituted when pattern matches. A missing substitution
+equals the empty string, which means the pattern is removed from the interface
+name on match.
+
+Backreferences ($1 style) to parenthesized groups in the pattern can be used in
+the substitution string.
+
+=back
+
+=item config-name keyword
+
+Interface type in the router's configuration file.
+
+=item dns-name keyword
+
+Interface type in the constructed DNS label.
+
+=back
+
+=item reverse-zone-sort-by keyword
+
+Specifies the sorting order of reverse zones. Possible values are:
+
+=over
+
+=item device
+
+Sort reverse DNS entries by device. PTR resource records will
+be grouped by the devices. This is the default.
+
+=item address
+
+Sort reverse DNS entries by the IP address. PTR resource records will
+not be grouped.
+
+=back
+
+=item register-unnumbered keyword
+
+Boolean value specifying whether forward (A and AAAA) records are generated for
+unnumbered interfaces or not. Default is false.
+
+=back
+
+=head2 RESTRICTIONS BLOCK
+
+The restrictions top-level block may contain an IP prefix, a VRF, and an
+interface list. These lists are used to omit certain DNS entries based on the
+IP address or the interface name or the VRF the interface belongs to.
+
+Each list consists of ordered include and exclude keyword-value pairs. The
+values are IP prefixes or VRF/interface name regular expressions. The lists are
+processed line by line from the top, and the first line to match the IP address
+or the VRF/interface name decides whether the current address or name will be
+included or excluded. If there's no match, then an implicit exclusion applies.
+
+Undefined lists treat everything as included, that is, there are no restrictions.
+(On the other hand, an empty restriction list treats everything as excluded because of the
+implicit exclusion at the end of the list.)
+
+=over
+
+=item address-list block
+
+The address-list block contains ordered IP prefixes. 
+IPv4 and IPv6 prefixes can be mixed in the list
+because an IPv6 entry will never match an IPv4 address and vice versa. 
+(This means that an imaginary IPv6-only and IPv4-only list can be concatenated,
+or even interleaved arbitrarily, as long as entries' order in each IP version
+is preserved among that IP version entries.)
+
+=over
+
+=item include, exclude keywords
+
+Specifies an IPv4 or IPv6 prefix as the value. Addresses belonging to that prefix are
+included or excluded respectively, if that is the first line in the list to match the
+analyzed IP address.
+
+=back
+
+=item vrf-list block
+
+The vrf-list block contains ordered VRF name items. 
+
+=over
+
+=item include, exclude keywords
+
+Specifies a VRF name regular expression as the value. (Every value is
+treated as a regular expression, please do not add surrounding slashes
+or any similar markup.) Interfaces belonging to the VRF
+whose name is matched by the regex are included or excluded respectively, if
+that is the first line to match the analyzed VRF name.
+
+=back
+
+=item interface-list block
+
+The interface-list block contains ordered interface name items. 
+
+=over
+
+=item include, exclude keywords
+
+Specifies an interface name regular expression as the value. (Every value is
+treated as a regular expression, please do not add surrounding slashes
+or any similar markup.)
+
+The regex is matched against the interface name, as those appear in the
+device's configuration (e.g. GigabitEthernet0/6). Interfaces whose name is
+matched by the regex are included or excluded respectively, if that is the
+first line to match the analyzed interface name.
+
+=back
+
+=back
+
+=head1 SEE ALSO
+
+router2dns(1)
+
+=cut
